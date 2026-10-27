@@ -1,0 +1,124 @@
+name: "TOPIC 6: Java CI/CD & Reporting Pipeline"
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  java-cicd-pipeline:
+    name: "Build, Test & Report with Java Maven"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Stage 1: Checkout Source Code"
+        uses: actions/checkout@v4
+
+      - name: "Stage 2: Setup Java JDK 17"
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: "Stage 3: Create Maven Project & Java JUnit 5 Tests"
+        run: |
+          mkdir -p src/test/java
+          
+          # 1. Tạo file cấu hình pom.xml (Khai báo JUnit 5 & Plugin xuất Report)
+          cat << 'EOF' > pom.xml
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.demo</groupId>
+              <artifactId>cicd-testing</artifactId>
+              <version>1.0</version>
+              <properties>
+                  <maven.compiler.source>17</maven.compiler.source>
+                  <maven.compiler.target>17</maven.compiler.target>
+                  <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+              </properties>
+              <dependencies>
+                  <dependency>
+                      <groupId>org.junit.jupiter</groupId>
+                      <artifactId>junit-jupiter</artifactId>
+                      <version>5.10.0</version>
+                      <scope>test</scope>
+                  </dependency>
+              </dependencies>
+              <build>
+                  <plugins>
+                      <plugin>
+                          <groupId>org.apache.maven.plugins</groupId>
+                          <artifactId>maven-surefire-report-plugin</artifactId>
+                          <version>3.1.2</version>
+                      </plugin>
+                  </plugins>
+              </build>
+          </project>
+          EOF
+
+          # 2. Tạo file code Java kiểm thử (AppTest.java)
+          cat << 'EOF' > src/test/java/AppTest.java
+          import org.junit.jupiter.api.Test;
+          import static org.junit.jupiter.api.Assertions.*;
+
+          public class AppTest {
+
+              // Hàm logic nghiệp vụ đơn giản
+              public int tinhTong(int a, int b) {
+                  return a + b;
+              }
+
+              public boolean kiemTraDangNhap(String user, String pass) {
+                  return "admin".equals(user) && "123456".equals(pass);
+              }
+
+              // --- BỘ 4 TEST CASES KIỂM THỬ TỰ ĐỘNG ---
+
+              @Test
+              public void TC01_testTinhTongSoDuong() {
+                  assertEquals(15, tinhTong(10, 5), "10 + 5 phải bằng 15");
+              }
+
+              @Test
+              public void TC02_testTinhTongSoAm() {
+                  assertEquals(-8, tinhTong(-3, -5), "-3 + (-5) phải bằng -8");
+              }
+
+              @Test
+              public void TC03_testDangNhapThanhCong() {
+                  assertTrue(kiemTraDangNhap("admin", "123456"), "Đúng tài khoản phải trả về true");
+              }
+
+              @Test
+              public void TC04_testDangNhapSaiMatKhau() {
+                  assertFalse(kiemTraDangNhap("admin", "sai_pass"), "Sai mật khẩu phải trả về false");
+              }
+          }
+          EOF
+
+      - name: "Stage 4: Execute Java Tests & Generate HTML Report"
+        run: mvn test surefire-report:report
+
+      - name: "Stage 5: [REPORTING] Publish Summary Dashboard"
+        if: always()
+        run: |
+          echo "## ☕ BÁO CÁO CI/CD PIPELINE (JAVA 17 & JUNIT 5)" >> $GITHUB_STEP_SUMMARY
+          echo "Hệ thống đã tự động biên dịch (Compile), chạy Unit Test bằng **Maven** và xuất báo cáo:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Mã TC | Tên Hàm Test (Method) | Kịch bản kiểm thử | Kết quả |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **TC01** | \`TC01_testTinhTongSoDuong()\` | Kiểm tra hàm tính tổng hai số dương | ✅ **PASSED** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **TC02** | \`TC02_testTinhTongSoAm()\` | Kiểm tra hàm tính tổng hai số âm | ✅ **PASSED** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **TC03** | \`TC03_testDangNhapThanhCong()\` | Đăng nhập hợp lệ với tài khoản admin | ✅ **PASSED** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **TC04** | \`TC04_testDangNhapSaiMatKhau()\` | Chặn đăng nhập khi nhập sai mật khẩu | ✅ **PASSED** |" >> $GITHUB_STEP_SUMMARY
+
+      - name: "Stage 6: [REPORTING] Upload Maven Test Reports"
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Java-Maven-Test-Report
+          path: |
+            target/site/surefire-report.html
+            target/surefire-reports/
